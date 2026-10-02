@@ -1,0 +1,33 @@
+{
+  "name": "archon-solver",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Off-chain intent matching service for the Archon DEX",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "extract-abis": "node scripts/extract-abis.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "ethers": "^6.17.0",
+    "express": "^5.2.1",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}
