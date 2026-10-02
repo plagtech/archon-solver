@@ -12,6 +12,7 @@ import { SettlementSubmitter } from './engine/submitter.js';
 import { EventBus, publishIntentEvents } from './events.js';
 import { createApp } from './api/routes.js';
 import { attachWebSocket } from './api/websocket.js';
+import { StatsCollector } from './stats.js';
 
 const SHUTDOWN_GRACE_MS = 15_000;
 
@@ -26,6 +27,7 @@ async function main() {
   const contracts = createContracts(config, provider);
   const market = new Market(config, contracts);
   const mempool = new Mempool();
+  const stats = new StatsCollector(config, wallet.address, mempool);
   const bus = new EventBus();
   publishIntentEvents(mempool, bus);
 
@@ -56,6 +58,7 @@ async function main() {
     mempool,
     contracts.engine.interface,
     config.addresses.engine,
+    { stats },
   );
 
   const loop = new MatchingLoop({
@@ -79,6 +82,7 @@ async function main() {
     market,
     mempool,
     solverAddress: wallet.address,
+    stats,
     poolPrices: () => listener.poolPrices(),
     lastSettlement: () => submitter.lastSettlement,
   });

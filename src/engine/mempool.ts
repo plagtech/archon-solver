@@ -124,6 +124,20 @@ export class Mempool {
       .sort((x, y) => x.receivedAt - y.receivedAt);
   }
 
+  /** Live (non-terminal) intent counts per pair, by status */
+  liveByPair(): Map<PairKey, { pending: number; matched: number; settling: number }> {
+    const out = new Map<PairKey, { pending: number; matched: number; settling: number }>();
+    for (const [key, ids] of this.byPair) {
+      const counts = { pending: 0, matched: 0, settling: 0 };
+      for (const id of ids) {
+        const status = this.byId.get(id)?.status;
+        if (status === 'pending' || status === 'matched' || status === 'settling') counts[status]++;
+      }
+      out.set(key, counts);
+    }
+    return out;
+  }
+
   pendingCount(): number {
     let n = 0;
     for (const intent of this.byId.values()) if (intent.status === 'pending') n++;

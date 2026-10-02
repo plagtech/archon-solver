@@ -21,6 +21,9 @@ export interface TxReceiptInfo {
   status: number;
   blockNumber: number;
   logs: RawLog[];
+  gasUsed: bigint;
+  /** Price actually paid per gas unit (wei) */
+  effectiveGasPrice: bigint;
 }
 
 /** Vault state that decides whether a batch leg will be pulled */
@@ -125,6 +128,8 @@ export class EthersSolverChain implements SolverChain {
     return {
       status: r.status ?? 0,
       blockNumber: r.blockNumber,
+      gasUsed: r.gasUsed,
+      effectiveGasPrice: r.gasPrice,
       logs: r.logs.map((l) => ({ address: l.address, topics: l.topics, data: l.data })),
     };
   }

@@ -6,6 +6,7 @@ import { type ParsedError, parseError, revertPolicy } from '../chain/errors.js';
 import type { NonceManager } from '../chain/nonce.js';
 import type { SettleTx, SolverChain, TxFees, TxReceiptInfo, VaultLegState } from '../chain/solver-chain.js';
 import type { PendingIntent } from '../types/intent.js';
+import type { StatsCollector } from '../stats.js';
 
 export interface SubmitterOptions {
   /** Gas limit = estimate × gasBufferNum / gasBufferDen (default 3/2) */
@@ -23,6 +24,8 @@ export interface SubmitterOptions {
   maxReplacements?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** Receives submitted batches and settlement receipts for GET /stats */
+  stats?: Pick<StatsCollector, 'recordSubmitted' | 'recordReceipt'>;
 }
 
 export interface LegProblem {
@@ -65,7 +68,8 @@ export class SettlementSubmitter implements BatchSubmitter {
   lastSettlement?: Date;
   batchesSettled = 0;
 
-  private readonly opts: Required<SubmitterOptions>;
+  private readonly opts: Required<Omit<SubmitterOptions, 'stats'>>;
+  private readonly stats: SubmitterOptions['stats'];
   private pausedUntil = 0;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly inFlight = new Set<Promise<void>>();
@@ -91,6 +95,7 @@ export class SettlementSubmitter implements BatchSubmitter {
       sleep: defaultSleep,
       ...options,
     };
+    this.stats = options.stats;
   }
 
   isAvailable(): boolean {
@@ -147,6 +152,7 @@ export class SettlementSubmitter implements BatchSubmitter {
     // 3. Sign + broadcast
     const sent = await this.broadcastWithRetry(plan, { data, gasLimit, nonce: -1, ...fees });
     if (!sent) return;
+    this.stats?.recordSubmitted();
 
     for (const intent of plan.intents) {
       this.mempool.setStatus(intent.id, 'settling', { txHash: sent.hash });
@@ -282,6 +288,7 @@ export class SettlementSubmitter implements BatchSubmitter {
   private async finalize(flight: InFlight, hash: string, receipt: TxReceiptInfo): Promise<void> {
     const { plan } = flight;
     if (receipt.status !== 1) {
+      this.stats?.recordReceipt(receipt, []);
       // The whole tx reverted, so no vault was touched and every intent can be retried
       const parsed = parseError(await this.chain.replay(flight.tx.data, receipt.blockNumber));
       console.error(`[submitter] ${hash} reverted on-chain: ${parsed.message}`);
@@ -289,16 +296,20 @@ export class SettlementSubmitter implements BatchSubmitter {
     }
 
     const engine = this.engineAddress.toLowerCase();
+    const engineLogs = [];
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() !== engine) continue;
       const parsed = this.engine.parseLog(log);
-      if (parsed) applyEngineLog(this.mempool, parsed, hash);
+      if (!parsed) continue;
+      engineLogs.push(parsed);
+      applyEngineLog(this.mempool, parsed, hash);
     }
     for (const intent of this.live(plan.intents)) {
       this.mempool.setStatus(intent.id, 'failed', { txHash: hash, lastExclusion: 'not reported in settlement logs' });
     }
     this.lastSettlement = new Date(this.opts.now());
     this.batchesSettled++;
+    this.stats?.recordReceipt(receipt, engineLogs);
     console.log(`[submitter] ${hash} settled in block ${receipt.blockNumber}`);
   }
 

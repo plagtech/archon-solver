@@ -3,6 +3,7 @@ import { getAddress, isAddress } from 'ethers';
 import type { Config } from '../config.js';
 import type { Market } from '../chain/market.js';
 import { DuplicateIntentError, type Mempool } from '../engine/mempool.js';
+import type { StatsCollector } from '../stats.js';
 import type { PendingIntent } from '../types/intent.js';
 import { ValidationError, parseIntent, parseUintString } from './validation.js';
 
@@ -13,6 +14,7 @@ export interface ApiDeps {
   market: Market;
   mempool: Mempool;
   solverAddress: string;
+  stats: Pick<StatsCollector, 'snapshot'>;
   /** Latest pool prices by pair name (from the event listener) */
   poolPrices?: () => Record<string, string>;
   lastSettlement?: () => Date | undefined;
@@ -111,6 +113,11 @@ export function createApp(deps: ApiDeps) {
       poolPrices: deps.poolPrices?.() ?? {},
       uptime: Math.floor((now() - startedAt) / 1000),
     });
+  });
+
+  // Counters since process start, served from memory (no RPC), like /health
+  app.get('/stats', (_req, res) => {
+    res.json(deps.stats.snapshot());
   });
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

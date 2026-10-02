@@ -232,11 +232,20 @@ Pushes relevant events to connected WebSocket clients.
 }
 ```
 
-**GET /stats** — Returns settlement statistics:
-- Total batches settled
-- Total volume by pair
-- Average match rate (% of intents matched vs pool-routed)
-- Average settlement time
+**GET /stats** — In-memory counters since process start (reset on restart). Response type:
+`SolverStats` in src/stats.ts, mirrored in the SDK's src/types.ts — change both together.
+- `solver` (address, chainId), `uptime` (startedAt, now, seconds)
+- `intents`: received, settled, matched (any CoW fill), routedThroughPool (any pool fill),
+  refunded, expired, failed
+- `mempool`: pending / inFlight (matched + settling), total and per pair
+- `volume`: per pair in its quote token (first symbol) — settled, matched, routedThroughPool,
+  matchRate; overall matchRate (null if pairs have different quote tokens)
+- `settlement`: batchesSubmitted / Settled / Reverted, gasUsed, gasSpentWei, lastSettlement,
+  averageSettlementMs
+
+Fed by StatsCollector: mempool status changes (intent counts) and the submitter's own receipts
+(batches, gas, CoW split from BatchSettled/IntentFilled). Receipt-based figures can trail
+intent statuses by up to confirmPollMs.
 
 ## Environment Variables
 

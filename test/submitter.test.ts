@@ -150,6 +150,8 @@ describe('SettlementSubmitter', () => {
       chain.receipts.set(hash, {
         status: 1,
         blockNumber: 10,
+        gasUsed: 150_000n,
+        effectiveGasPrice: 2n,
         logs: [filledLog(a, dai(99.98)), engineLog('IntentRefunded', b, [b.tokenIn, b.amountIn])],
       });
 
@@ -271,7 +273,7 @@ describe('SettlementSubmitter', () => {
     const a = await makeIntent(alice, { tokenIn: USDC, tokenOut: DAI, amountIn: usdc(1) });
     let broadcasts = 0;
     chain.onBroadcast = (_tx, hash) => {
-      if (++broadcasts === 2) chain.receipts.set(hash, { status: 1, blockNumber: 11, logs: [filledLog(a, dai(0.9996))] });
+      if (++broadcasts === 2) chain.receipts.set(hash, { status: 1, blockNumber: 11, gasUsed: 1n, effectiveGasPrice: 1n, logs: [filledLog(a, dai(0.9996))] });
     };
 
     await submitter.submit(await plan(a));
@@ -287,7 +289,7 @@ describe('SettlementSubmitter', () => {
   it('requeues intents when the tx reverts on-chain', async () => {
     const a = await makeIntent(alice, { tokenIn: USDC, tokenOut: DAI, amountIn: usdc(1) });
     chain.replayError = revert('RouterPaused');
-    chain.onBroadcast = (_tx, hash) => chain.receipts.set(hash, { status: 0, blockNumber: 12, logs: [] });
+    chain.onBroadcast = (_tx, hash) => chain.receipts.set(hash, { status: 0, blockNumber: 12, gasUsed: 1n, effectiveGasPrice: 1n, logs: [] });
     await submitter.submit(await plan(a));
     await submitter.drain();
     expect(status(a)).toBe('pending');
