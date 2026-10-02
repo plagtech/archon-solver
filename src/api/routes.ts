@@ -13,6 +13,9 @@ export interface ApiDeps {
   market: Market;
   mempool: Mempool;
   solverAddress: string;
+  /** Latest pool prices by pair name (from the event listener) */
+  poolPrices?: () => Record<string, string>;
+  lastSettlement?: () => Date | undefined;
   now?: () => number;
 }
 
@@ -97,13 +100,15 @@ export function createApp(deps: ApiDeps) {
     res.json(statusView(intent));
   });
 
-  // Liveness for the Railway health check. Prices, last settlement and /stats come later.
+  // Railway health check. Served from memory only, so an RPC outage doesn't fail it.
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
       chain: config.chainId,
       solverAddress: deps.solverAddress,
       pendingIntents: mempool.pendingCount(),
+      lastSettlement: deps.lastSettlement?.()?.toISOString() ?? null,
+      poolPrices: deps.poolPrices?.() ?? {},
       uptime: Math.floor((now() - startedAt) / 1000),
     });
   });
@@ -135,6 +140,8 @@ function statusView(intent: PendingIntent) {
     minAmountOut: intent.minAmountOut.toString(),
     deadline: intent.deadline,
     expectedOut: intent.expectedOut?.toString(),
+    amountOut: intent.amountOut?.toString(),
+    batchId: intent.batchId?.toString(),
     txHash: intent.txHash,
     reason: intent.lastExclusion,
   };

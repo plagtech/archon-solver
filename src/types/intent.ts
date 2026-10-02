@@ -23,6 +23,11 @@ export interface PendingIntent extends SignedIntent {
   /** Output the matcher expects the intent to receive in the current plan */
   expectedOut?: bigint;
   txHash?: string;
+  /** Output delivered on-chain (IntentFilled.amountOut) */
+  amountOut?: bigint;
+  batchId?: bigint;
+  /** Submissions that failed for a reason not attributable to a specific leg */
+  attempts?: number;
 }
 
 /** Sorted token addresses, "0xlower-0xhigher" */

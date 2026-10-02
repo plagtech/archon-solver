@@ -14,6 +14,9 @@ export function pairKey(tokenX: string, tokenY: string): PairKey {
 
 export class DuplicateIntentError extends Error {}
 
+/** Called after an intent is added (from = null) or changes status */
+export type StatusListener = (intent: PendingIntent, from: IntentStatus | null) => void;
+
 /**
  * In-memory intent store. Not persistent: intents have short deadlines and the solver
  * restarts clean.
@@ -23,11 +26,16 @@ export class Mempool {
   private readonly byPair = new Map<PairKey, Set<string>>();
   /** "vault:sessionKey:nonce" of every live (non-terminal) intent, to reject nonce conflicts */
   private readonly liveNonces = new Map<string, string>();
+  private readonly listeners: StatusListener[] = [];
 
   constructor(
     private readonly now: () => number = Date.now,
     private readonly retentionMs = DEFAULT_RETENTION_MS,
   ) {}
+
+  onStatusChange(listener: StatusListener): void {
+    this.listeners.push(listener);
+  }
 
   add(intent: SignedIntent): PendingIntent {
     const id = intentId(intent);
@@ -55,6 +63,7 @@ export class Mempool {
     let set = this.byPair.get(key);
     if (!set) this.byPair.set(key, (set = new Set()));
     set.add(id);
+    this.notify(pending, null);
     return pending;
   }
 
@@ -65,12 +74,37 @@ export class Mempool {
   setStatus(id: string, status: IntentStatus, patch: Partial<PendingIntent> = {}): PendingIntent | undefined {
     const intent = this.byId.get(id);
     if (!intent) return undefined;
+    const from = intent.status;
     Object.assign(intent, patch, { status });
     if (TERMINAL.has(status)) {
       this.liveNonces.delete(this.nonceKey(intent));
       this.byPair.get(pairKey(intent.tokenIn, intent.tokenOut))?.delete(id);
     }
+    if (from !== status) this.notify(intent, from);
     return intent;
+  }
+
+  /** The live (non-terminal) intent using a session key nonce, if any */
+  findLive(vault: string, sessionKey: string, nonce: number | bigint): PendingIntent | undefined {
+    const id = this.liveNonces.get(`${vault.toLowerCase()}:${sessionKey.toLowerCase()}:${nonce}`);
+    return id === undefined ? undefined : this.byId.get(id);
+  }
+
+  /** Vaults with live or recently finished intents (finished ones are kept for the retention window) */
+  knownVaults(): string[] {
+    const vaults = new Set<string>();
+    for (const intent of this.byId.values()) vaults.add(intent.vault);
+    return [...vaults];
+  }
+
+  /** Pending intents from a vault, across all pairs */
+  pendingForVault(vault: string): PendingIntent[] {
+    const v = vault.toLowerCase();
+    return [...this.byId.values()].filter((i) => i.status === 'pending' && i.vault.toLowerCase() === v);
+  }
+
+  isTerminal(intent: PendingIntent): boolean {
+    return TERMINAL.has(intent.status);
   }
 
   /** Pairs that currently have at least one pending intent */
@@ -113,6 +147,16 @@ export class Mempool {
       }
     }
     return expired;
+  }
+
+  private notify(intent: PendingIntent, from: IntentStatus | null): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(intent, from);
+      } catch (err) {
+        console.error('[mempool] status listener failed', err);
+      }
+    }
   }
 
   private nonceKey(intent: SignedIntent): string {

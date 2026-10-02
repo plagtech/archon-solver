@@ -229,6 +229,8 @@ export function encodeSettleBatch(engine: Interface, plan: BatchPlan): string {
  */
 export interface BatchSubmitter {
   submit(plan: BatchPlan): Promise<void>;
+  /** False while submissions are paused (e.g. after a configuration error); planning is skipped */
+  isAvailable?(): boolean;
 }
 
 export interface MatchingLoopDeps {
@@ -277,6 +279,7 @@ export class MatchingLoop {
     mempool.expire();
 
     const plans: BatchPlan[] = [];
+    if (submitter.isAvailable && !submitter.isAvailable()) return plans;
     for (const key of mempool.activePairs()) {
       const pair = this.pairsByKey.get(key);
       if (!pair) continue;

@@ -25,10 +25,13 @@ export interface Config {
   matchIntervalMs: number;
   deadlineBufferSec: number;
   rpcBatchMax: number;
+  eventPollMs: number;
+  priceMoveBps: number;
   solverPrivateKey: string;
   rpcUrl: string;
   wsUrl?: string;
-  flashbotsRpc?: string;
+  /** Send-only RPC for settlement txs; reads always use rpcUrl */
+  privateRpcUrl?: string;
   addresses: {
     router: string;
     engine: string;
@@ -100,10 +103,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     matchIntervalMs: intEnv('MATCH_INTERVAL', 3000),
     deadlineBufferSec: intEnv('DEADLINE_BUFFER_SEC', 6),
     rpcBatchMax: intEnv('RPC_BATCH_MAX', 10),
+    eventPollMs: intEnv('EVENT_POLL_INTERVAL', 2000),
+    priceMoveBps: intEnv('PRICE_MOVE_BPS', 10),
     solverPrivateKey: required('SOLVER_PRIVATE_KEY'),
     rpcUrl: required('BASE_RPC_URL'),
     wsUrl: env.BASE_WS_URL || undefined,
-    flashbotsRpc: env.FLASHBOTS_RPC || undefined,
+    // FLASHBOTS_RPC is accepted for compatibility, but Flashbots Protect does not serve Base
+    privateRpcUrl: env.PRIVATE_RPC_URL || env.FLASHBOTS_RPC || undefined,
     addresses: {
       router: address(env.ROUTER_ADDRESS || deployment.ArchonRouter, 'ArchonRouter'),
       engine: address(env.ENGINE_ADDRESS || deployment.IntentEngine, 'IntentEngine'),
